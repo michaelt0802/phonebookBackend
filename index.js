@@ -6,7 +6,6 @@ const app = express()
 const mongoose = require('mongoose')
 const Person = require('./models/person')
 
-
 app.use(express.json())
 app.use(cors())
 app.use(express.static('build'))
@@ -19,7 +18,9 @@ const errorHandler = (error, request, response, next) => {
   console.error(error.message)
 
   if (error.name === 'CastError') {
-    return response.status(400).send({error: 'malformatted id'})
+    return response.status(400).send({ error: 'malformatted id' })
+  } else if (error.name === 'ValidationError') {
+    return response.status(400).send({ error: error.message })
   }
 
   next(error)
@@ -54,35 +55,28 @@ app.get('/api/persons/:id', async (req, res) => {
   }
 })
 
-app.post('/api/persons/', async (req, res) => {
+app.post('/api/persons/', async (req, res, next) => {
   const body = req.body
-
-  if(body.name === undefined || body.name === '') {
-    return res.status(400).json('missing name')
-  }
-
-  if(body.number === undefined || body.number === '') {
-    return res.status(400).json('missing number')
-  }
 
   const person = new Person({
     name: body.name,
     number: body.number,
   })
-
-  res.json(await person.save())
+  try {
+    res.json(await person.save())
+  } catch (error) {
+    next(error)
+  }
 })
 
 app.put('/api/persons/:id', async (req, res, next) => {
   try {
-    const body = req.body
-    console.log('body', body)
-    const person = {
-      name: body.name,
-      number: body.number,
-      _id: body._id,
-    }
-    res.json(await Person.findByIdAndUpdate(req.params.id, person, { new: true }))
+    const { name, number, _id } = req.body
+    res.json(await Person.findByIdAndUpdate(
+      req.params.id,
+      { name, number, _id},
+      { new: true, runValidators: true, context: 'query'})
+    )
   } catch (error) {
     next(error)
   }
